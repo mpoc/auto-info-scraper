@@ -18,8 +18,35 @@ import java.util.regex.Pattern;
 public class Main {
 
     public static void main(String[] args) throws IOException {
-        String carUrl = "https://autogidas.lt/skelbimas/volkswagen-passat-benzinas-1997-m-b4-0129301767.html";
-        System.out.println(getParameters(carUrl));
+        //String carUrl = "https://autogidas.lt/skelbimas/volkswagen-passat-benzinas-1997-m-b4-0129301767.html";
+        //System.out.println(getParameters(carUrl));
+
+        String pageUrl = "https://autogidas.lt/skelbimai/automobiliai/?f_1=Asia";
+        getUrls(pageUrl);
+    }
+
+    public static void getUrls(String page) throws IOException {
+        Document d = Jsoup.connect(page + "&page=1").timeout(6000).get();
+
+        //Gets the number of pages in the search
+        Element paginatorElement = d.getElementsByClass("paginator").get(0);
+        String[] pages = paginatorElement.text().split(" ");
+        int noOfPages = Integer.parseInt(pages[pages.length-1]);
+
+        ArrayList<String> carAdUrls = new ArrayList<String>();
+
+        for (int i = 1; i <= noOfPages; i++) {
+            Document p = Jsoup.connect(page + "&page=" + i).timeout(6000).get();
+            Element getUrls = p.getElementsByClass("all-ads-block").get(0);
+            Elements getUrlsUrls = getUrls.getElementsByClass("item-link");
+
+            //TODO check if URL's are unique
+            for (Element temp : getUrlsUrls) {
+                carAdUrls.add("https://autogidas.lt" + temp.attr("href"));
+            }
+        }
+
+        System.out.println(carAdUrls);
     }
 
     public static Map<String, String> getParameters(String url) throws IOException {
