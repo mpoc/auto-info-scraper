@@ -6,12 +6,11 @@ import org.jsoup.nodes.Element;
 import org.jsoup.select.Elements;
 
 import java.io.IOException;
+import java.sql.*;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
-import java.util.ArrayList;
+import java.util.*;
 import java.util.Date;
-import java.util.HashMap;
-import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -21,11 +20,85 @@ public class Main {
         //String carUrl = "https://autogidas.lt/skelbimas/volkswagen-passat-benzinas-1997-m-b4-0129301767.html";
         //System.out.println(getParameters(carUrl));
 
-        String pageUrl = "https://autogidas.lt/skelbimai/automobiliai/?f_1=Asia";
-        getUrls(pageUrl);
+        String pageUrl = "https://autogidas.lt/skelbimai/automobiliai/?f_1=Volvo&f_model_14=C30&f_215=&f_216=&f_41=&f_42=&f_3=&f_2=&f_376=";
+        ArrayList<String> urls = getUrls(pageUrl);
+
+        //System.out.println(getParameters("https://autogidas.lt/skelbimas/dodge-grand-caravan-benzinasdujos-2008-m-vienaturis-0129960053.html"));
+
+        StringBuilder sqlinsert = new StringBuilder();
+        sqlinsert.append("INSERT INTO data (id, url, make, model, year, price, extraTaxes, mileage, sold, techCheckUpAvailable, techValidMonths, engineSize, fault, enginePower, numOfAddons) VALUES ");
+
+        Iterator itr = urls.iterator();
+        while(itr.hasNext()) {
+            Object element = itr.next();
+            Map<String, String> prmtrs = getParameters(element.toString());
+            sqlinsert.append("(");
+            sqlinsert.append(prmtrs.get("id"));
+            sqlinsert.append(", ");
+            sqlinsert.append("'");
+            sqlinsert.append(prmtrs.get("url"));
+            sqlinsert.append("'");
+            sqlinsert.append(", ");
+            sqlinsert.append("'");
+            sqlinsert.append(prmtrs.get("make"));
+            sqlinsert.append("'");
+            sqlinsert.append(", ");
+            sqlinsert.append("'");
+            sqlinsert.append(prmtrs.get("model"));
+            sqlinsert.append("'");
+            sqlinsert.append(", ");
+            sqlinsert.append(prmtrs.get("year"));
+            sqlinsert.append(", ");
+            sqlinsert.append(prmtrs.get("price"));
+            sqlinsert.append(", ");
+            sqlinsert.append(prmtrs.get("extraTaxes"));
+            sqlinsert.append(", ");
+            sqlinsert.append(prmtrs.get("mileage"));
+            sqlinsert.append(", ");
+            sqlinsert.append(prmtrs.get("sold"));
+            sqlinsert.append(", ");
+            sqlinsert.append(prmtrs.get("techCheckUpAvailable"));
+            sqlinsert.append(", ");
+            sqlinsert.append(prmtrs.get("techValidMonths"));
+            sqlinsert.append(", ");
+            sqlinsert.append(prmtrs.get("engineSize"));
+            sqlinsert.append(", ");
+            if (prmtrs.get("fault") == null) {
+                sqlinsert.append(prmtrs.get("fault"));
+            }
+            else {
+                sqlinsert.append("'");
+                sqlinsert.append(prmtrs.get("fault"));
+                sqlinsert.append("'");
+            }
+            sqlinsert.append(", ");
+            sqlinsert.append(prmtrs.get("enginePower"));
+            sqlinsert.append(", ");
+            sqlinsert.append(prmtrs.get("numOfAddons"));
+            sqlinsert.append(")");
+
+            if (!itr.hasNext()) {
+                sqlinsert.append(";");
+            }
+            else {
+                sqlinsert.append(", ");
+            }
+        }
+        System.out.println(sqlinsert);
+
+        Statement stmt = null;
+        try {
+            Class.forName("com.mysql.cj.jdbc.Driver");
+            Connection con = DriverManager.getConnection("jdbc:mysql://localhost:3306/autoinfo","autoinfouser","autoinfouserpw");
+            stmt = con.createStatement();
+            stmt.executeUpdate(sqlinsert.toString());
+            stmt.close();
+        } catch (Exception e) {
+            System.out.println(e);
+        }
     }
 
-    public static void getUrls(String page) throws IOException {
+    public static ArrayList<String> getUrls(String page) throws IOException {
         Document d = Jsoup.connect(page + "&page=1").timeout(6000).get();
 
         //Gets the number of pages in the search
@@ -46,7 +119,7 @@ public class Main {
             }
         }
 
-        System.out.println(carAdUrls);
+        return carAdUrls;
     }
 
     public static Map<String, String> getParameters(String url) throws IOException {
@@ -116,6 +189,7 @@ public class Main {
         }
         else {
             allParameters.put("techCheckUpAvailable", "false");
+            allParameters.put("techValidMonths", "0");
         }
 
         //Gets the engine details
@@ -132,11 +206,18 @@ public class Main {
             }
         }
 
-        //Gets the price of the car
+        //Gets the price and extra tax availability of the car
         if (parameters.containsKey("Kaina")) {
             String price = parameters.get("Kaina");
             price = price.replace(" ", "");
             price = price.replace("€", "");
+            if (price.contains("+mokesčiai")) {
+                allParameters.put("extraTaxes", "true");
+                price = price.replace("+mokesčiai", "");
+            }
+            else {
+                allParameters.put("extraTaxes", "false");
+            }
             allParameters.put("price", price);
         }
 
@@ -147,7 +228,15 @@ public class Main {
 
         //Gets the faults
         if (parameters.containsKey("Defektai")) {
-            allParameters.put("fault", parameters.get("Defektai"));
+            if (parameters.get("Defektai").equals("Be defektų")) {
+                allParameters.put("fault", null);
+            }
+            else {
+                allParameters.put("fault", parameters.get("Defektai"));
+            }
+        }
+        else {
+            allParameters.put("fault", null);
         }
 
         //Gets the addons of the car
@@ -166,7 +255,10 @@ public class Main {
         }
         allParameters.put("sold", String.valueOf(sold));
 
-        System.out.println(parameters);
+        allParameters.put("url", url);
+
+        //All the parameters from the webpage
+        //System.out.println(parameters);
 
         return allParameters;
     }
